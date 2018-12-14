@@ -18,10 +18,12 @@ The **rCRDC** package aims to allow users to more easily interact with the the C
 
 ## Installation
 
-You can install the developer version of rCRDC from [GitHub]() with:
+You can install the developer version of rCRDC from [GitHub](https://github.com/kpersauddavis/rCRDC) with:
 
 ``` r
-install.packages("rCRDC")
+library(devtools)
+
+devtools::install.github("kpersauddavis/rCRDC")
 ```
 
 ## Example
