@@ -1,0 +1,216 @@
+---
+title: "Code for MDS Final Project"
+author: "Kyle Davis"
+date: "12/10/2018"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r Setup, include=FALSE, results='hide', warning=FALSE}
+library(knitr)
+
+opts_chunk$set(fig.path="images/",
+               cache.path="cache/",
+               cache=FALSE,
+               echo=TRUE,
+               message=FALSE,
+               warning=FALSE)
+```
+
+### My goal is to query the api's for my project. The initial lines will be testing the parameters to understand what is returned
+
+```{r}
+library(httr)
+library(tidyverse)
+library(purrr)
+library(kableExtra)
+library(jsonlite)
+endpoint <- "https://api.ed.gov/data/crdc_enrollment_2013-14?"
+```
+
+
+```{r message=FALSE, warning=FALSE}
+query_params <- list("api_key" = Sys.getenv("TOKEN"), "per_page" = "15000", "sort"=NULL )
+CRDC_response <- GET(endpoint, query = query_params)
+str(CRDC_response, max.level = 1)
+```
+
+
+```{r}
+CRDC_data <- fromJSON(content(CRDC_response, as = "text"))
+str(CRDC_data$resources, max.level = 1)
+```
+
+
+### Let's build a function for only the above endpoint
+
+```{r}
+CRDC_Query <- function(dataset = "enrollment", api_key = Sys.getenv("TOKEN"), per_page = "1000", sort = "LEAID", filter = NULL, page = 1, preprocess = T, vars = NULL) {
+  
+  if(dataset = "enrollment"){
+    endpoint = "https://api.ed.gov/data/crdc_enrollment_2013-14?"
+  } else{
+    endpoint = "https://api.ed.gov/data/crdc_oosuspensions_2013-14?"
+  }
+  
+  query_params <- list("api_key" = api_key, "per_page" = per_page, "sort" = sort, "filter" = filter, "page" = page)
+  
+  CRDC_response <- GET(endpoint, query = query_params)
+  
+  if(http_error(CRDC_response)){
+    
+    warning("The request produced an error. Please check that api key and all other parameters are correct")
+  
+    } else{
+    
+      CRDC_data <- fromJSON(content(CRDC_response, as = "text", encoding = "UTF-8"))
+    
+      CRDC_dataframe <- CRDC_data$resources
+    
+      }
+      
+  if(preprocess == T){
+    col.names <- c("LEA_NAME","LEA_STATE", "SCH_NAME","COMBOKEY","LEAID")
+    
+    suppressWarnings(CRDC_dataframe[!(colnames(CRDC_dataframe) %in% (col.names))] <- sapply(CRDC_dataframe[!(colnames(CRDC_dataframe) %in% (col.names))],as.numeric))
+  
+    CRDC_dataframe[CRDC_dataframe < 0] <- NA
+    
+    }
+  
+  
+  if(is.null(vars)){
+    return(CRDC_dataframe)
+  } else{
+    return(select(CRDC_dataframe, vars))
+  }
+
+  }
+
+test <- CRDC_Query(per_page = "100")
+testabsents <- CRDC_Query(endpoint = "https://api.ed.gov/data/crdc_oosuspensions_2013-14?")  
+```
+
+### Let's build a large request function
+
+```{r}
+CRDC_Large_Query <- function(dataset = "enrollment", api_key = Sys.getenv("TOKEN"), per_page = "15000", sort = "LEAID", filter = NULL, page = 1, numpages = NULL, preprocess = T, vars = NULL) {
+  
+  if(dataset = "enrollment"){
+    endpoint = "https://api.ed.gov/data/crdc_enrollment_2013-14?"
+  } else{
+    endpoint = "https://api.ed.gov/data/crdc_oosuspensions_2013-14?"
+  }
+    
+  
+  query_params <- list("api_key" = api_key, "per_page" = per_page, "sort" = sort, "filter" = filter, "page" = page)
+  CRDC_response <- GET(endpoint, query = query_params)
+  
+  if(http_error(CRDC_response)){
+    warning("The request produced an error. Please check that api key and all other parameters are correct")
+  } else{
+    
+    
+    CRDC_data <- fromJSON(content(CRDC_response, as = "text", encoding = "UTF-8"))
+    
+    CRDC_dataframe <- CRDC_data$resources
+    
+    if(is.null(numpages)){
+      page_numbers <- CRDC_data$pagination$pages
+    } else {
+      page_numbers <- numpages
+    }
+    
+    
+    for(i in 2:page_numbers){
+      query_params <- list("api_key" = api_key, "per_page" = per_page, "sort" = sort, "filter" = filter, "page" = i)
+      CRDC_response <- GET(endpoint, query = query_params)
+      CRDC_data <- fromJSON(content(CRDC_response, as = "text", encoding = "UTF-8"))
+      CRDC_dataframe <- rbind(CRDC_dataframe, CRDC_data$resources)
+      Sys.sleep(0.1)
+    }
+    
+    if(preprocess == T){
+    col.names <- c("LEA_NAME","LEA_STATE", "SCH_NAME","COMBOKEY","LEAID")
+    
+    suppressWarnings(CRDC_dataframe[!(colnames(CRDC_dataframe) %in% (col.names))] <- sapply(CRDC_dataframe[!(colnames(CRDC_dataframe) %in% (col.names))],as.numeric))
+  
+    CRDC_dataframe[CRDC_dataframe < 0] <- NA
+    
+    }
+    
+     if(is.null(vars)){
+    return(CRDC_dataframe)
+  } else{
+    return(select(CRDC_dataframe, vars))
+  }
+    
+  }
+}
+
+test <- CRDC_Large_Query()
+```
+
+
+### how do we merge and clean these two??
+
+```{r}
+CRDC_merge_clean <- function(enrollmentdata = CRDC_Query(dataset = "enrollment"), suspensiondata = CRDC_Query(dataset = "suspension"), preprocess = T, joinby = "COMBOKEY", enrollvars = NULL, suspensionvars = NULL){
+  
+  if(!str_detect(enrollvars, "COMBOKEY")){
+    warning("COMBOKEY must be included inorder to merge. Please add this to the list supplied to enrollvars parameter.")
+  }
+  
+  if(!str_detect(suspensionvars, "COMBOKEY")){
+    warning("COMBOKEY must be included inorder to merge. Please add this to the list supplied to suspensionvars parameter.")
+  }
+  
+  
+  if(is.null(enrollvars)){
+    enrollmentdata <- enrollmentdata
+  } else{
+    enrollmentdata <- enrollmentdata %>%
+      select(enrollvars)
+  }
+  
+  if(is.null(suspensionvars)){
+    suspensiondata <- suspensiondata
+  } else{
+    suspensiondata <- suspensiondata %>%
+      select(suspensionvars)
+  }
+  
+  CRDC_merged <- left_join(enrollmentdata, suspensiondata, by = joinby)
+  
+  if(preprocess == T){
+    col.names <- c("LEA_NAME","LEA_STATE", "SCH_NAME","COMBOKEY","LEAID")
+    
+    suppressWarnings(CRDC_merged[!(colnames(CRDC_merged) %in% (col.names))] <- sapply(CRDC_merged[!(colnames(CRDC_merged) %in% (col.names))],as.numeric))
+  
+    CRDC_merged[CRDC_merged < 0] <- NA
+    
+    }
+    
+    return(CRDC_dataframe)
+  
+}
+```
+
+
+### function to show off tidyverse skills
+
+```{r}
+CRDC_group_viz <- function(data = CRDC_merge_clean(), groupby = "state", intvar = c("TOT_ENR_M","TOT_ENR_F"), varnames = c()){
+  if(groupby == "state"){
+  data <- data %>%
+    group_by(LEA_STATE)
+  } else { 
+    data <- data %>%
+      group_by(LEAID)
+    }
+
+}
+
+CRDC_group_viz()
+```

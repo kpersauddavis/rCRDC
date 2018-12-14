@@ -1,0 +1,23 @@
+Package: rCRDC
+Type: Package
+Title: R Package to Interact with Civil Rights Document Collection (CRDC) APIs
+Version: 0.1.0
+Authors@R: person("Kyle", "Davis", email = "kpersauddavis@gmail.com",
+      role = c("aut", "cre"))
+Maintainer: Kyle Davis <kpersauddavis@gmail.com>
+Description: The package aim to act as client wrapper for the Civil Rights Document Collection (CRDC) APIs. The CRDC APIs offer access to two separate datasets: Public School Enrollment in 2013-14 and Out-of-School Suspensions in 2013-2014. The package provides a set of functions for making both small and large batch query requests from the CRDC APIs. The package also provides a function for merging the two available datasets. All functions in the package return a R readable object for analysis and also provide the optionallity to preproccess the data. 
+Encoding: UTF-8
+LazyData: true
+Imports: tidyr,
+    plyr,
+    dplyr,
+    httr,
+    stringr,
+    jsonlite,
+    magrittr
+RoxygenNote: 6.1.0.9000
+License: MIT + file LICENSE
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

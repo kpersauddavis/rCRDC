@@ -1,0 +1,211 @@
+---
+title: "Introduction to rCRDC: A package to Query the CRDC APIs in R"
+author: "Kyle Davis"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to rCRDC: A package to Query the CRDC APIs in R}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+library(plyr)
+library(dplyr)
+library(httr)
+library(jsonlite)
+library(stringr)
+```
+
+
+## Motivation
+
+Starting in 1968, the U.S. Department of education has collected data on education and civil rights issues in public schools across the United States. It is formally referred to as the Civil Rights Data Collection (CRDC). The project collect information including student enrollment, out of school suspensions, and chronic absenteeism. This information is, for the most part, disaggregated by gender, race, and ethnicity. The data obtained through this collection is a key component of the Department of Education's Office for Civil Rights strategy for adminstering and enforcing the civil rights statuses for which it is responsible. Please visit the [CRDC FAQ](https://www2.ed.gov/about/offices/list/ocr/frontpage/faq/crdc.html) page for more information on the Department of Education's effort.
+
+
+## Civil Rights Documentation Collection APIs
+
+The Department of Education hosts a number of APIs containing data which they collect. Among them are the CRDC APIs. The 2013-14 collection includes equity data from nearly every public school and public school district in the nation. The APIs provide access to several CRDC indicators. There are three APIs hosted by the Department of Education related to CRDC: Public School Enrollment, Chronic Absenteeism, and Out-of-School Suspension. As a note to users the Chronic Absenteeism API is currently deprecated. When the API is restored for developer use the package will update to allow for query requests to this database. For more information regarding the API, including the data dictionaries, please visit the  [CRDC API](https://usedgov.github.io/api/crdc.html) website.
+
+## Basic Package Overview
+
+The **rCRDC** package aims to allow users to more easily interact with the the CRDC APIs. The package provides several functions for making query requests to the CRDC APIs as well as merge the various APIs to one dataframe. The package returns objects that are R readable and ready for statistical analysis. 
+
+## Obtaining an API Key
+
+An API key is required to interact with the CRDC APIs. Please visit this website to obtain your API key <https://usedgov.github.io/key/>. A user can explicity define their API key by adjusting the **api_key** parameter in the query functions. Alternatively, a user can store their API key in the REnviron file as: 
+
+TOKEN = <user API key>
+
+## Questions, Comments, and Bugs
+
+Please contact Kyle Davis by email at <kpersauddavis@gmail.com> to provide questions and comments or report bugs.
+
+## Functionality Examples
+
+As stated earlier this package provides several functions for interacting with the CRDC API. In the following section we will review some case examples with each of these functions.
+
+### Function 1: CRDC_Query()
+
+The **CRDC_Query** function allows users to send basic query requests to either the enrollment or out-of-school suspensions APIs. There are a number of parameters that the user can adjust. We will review these parameters now.
+
+**dataset** This parameter is a string that can take one of two values to specify which dataset the user wants to query. The options are "enrollment" and "suspension". The parameter defaults to "enrollment".
+
+**api_key** This parameter a string representing the required api key to query the CRDC APIs. By default it is set to Sys.getenv("TOKEN"). Either replace with your user api key or specify in your Renviron file. API keys can be obtained at <https://usedgov.github.io/key/>.
+
+*per_page* This parameter is string representing the number of results per page you would like to see. This can be thought of as the number of observations that will be returned. By default it is set to 1000.
+
+*sort* This parameter is a string that allows the user to control how the output is sorted. By default this parameter is set to LEAID.
+
+*page* This parameter is a number representing which page of the results will be returned. By default this parameter is set to 1.
+
+*preprocess* This parameter is a logical which allows the user to turn on the optional preprocessing component of the function including converting the query result into a dataframe. By default this value is set to True.
+
+*vars* This parameter is a character vector that allows the user to select which variables from the query he/she would like returned. By default this parameter is set to NULL.
+
+Now that we understand the basic syntax, let's look through some examples utilizing the function.
+
+In the base case, when all parameters are set to the default value. Our query function will return 1000 observations from the enrollment CRDC API. By default, the query function will preprocess messy columns to the correct data clas (i.e. character, numeric, etc) and return a clean dataframe. Institutions can be uniquely identified by the *COMBOKEY* variable. 
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_data <- CRDC_Query()
+
+str(CRDC_data, list.len = 10)
+```
+
+
+In our next example, we will set preprocess equal to FALSE, indicating that a list will be returned. The list will contain 2 elements: metadata on the query executed and the underlying data as well. We will also now query the out-of-school suspension CRDC API as opposed to the enrollment CRDC API queried in the previous example by changing *dataset* parameter to "suspension". We will set the *preprocess* parameter to FALSE such that we can demonstrate the list object returned by the query. We will limit the number of observations returned to 100 by changing the *per_page* parameter to 100. We will also take the second page of results by changing the *page* parameter to 2. The CRDC APIs only allow 1 page to be returned per query request. To return the entire dataset please see the next function in this section **CRDC_Large_Query()**. The advantage of using **CRDC_Query()** is that this function allows the user to either return a list containing both the metadata and the query data or to return a dataframe of the query data. **CRDC_Large_Query()** is forced to return a dataframe. 
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_data <- CRDC_Query(dataset = "suspension", per_page = 100, page = 2, preprocess = FALSE)
+
+str(CRDC_data, list.len = 10)
+```
+
+
+In this example we will show the functionality of the remaining parameters. We will query the enrollment CRDC API in this example. We will only select two variables by setting *vars* equal to c("COMBOKEY","LEA_NAME"). We will sort the returned observations by their unique identifies by setting *sort* equal to "COMBOKEY". We can then manipulate this output to get a count for each district (as identified by *LEA_ID*).
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_data <- CRDC_Query(vars = c("COMBOKEY","LEA_NAME"), sort = "COMBOKEY") %>%
+  group_by(LEA_NAME) %>%
+  summarise(count = n())
+
+
+head(CRDC_data)
+```
+
+### Function 2: CRDC_Large_Query()
+
+We mentioned earlier that one of the limitations of the CRDC APIs is the ability to only return one page per query request. Considering there are over 95,000 observations, it can be a cumbersome task to continually query each page. To combat this shortcomming we created the **CRDC_Large_Query()** function. This function is able to return multiple (up to the max pages) pages of results to the user. If you are looking to query the entire dataset use this function. If you are looking for subsets use the **CRDC_Query()** function.
+
+We will not review the parameters in this function that match that from the **CRDC_Query()** function. However, here is a complete list of the parameters that the **CRDC_Large_Query()** function accepts:
+
+*dataset* This parameter is a string that can take one of two values to specify which dataset the user wants to query. The options are "enrollment" and "suspension". The parameter defaults to "enrollment".
+
+*api_key* This parameter a string representing the required api key to query the CRDC APIs. By default it is set to Sys.getenv("TOKEN"). Either replace with your user api key or specify in your Renviron file. API keys can be obtained at https://usedgov.github.io/key/.
+
+*per_page* This parameter is string representing the number of results per page you would like to see. This can be thought of as the number of observations that will be returned. By default it is set to 1000.
+
+*sort* This parameter is a string that allows the user to control how the output is sorted. By default this parameter is set to LEAID.
+
+*page* This parameter is a number representing which page of the results will be returned. By default this parameter is set to 1.
+
+*preprocess* This parameter is a logical which allows the user to turn on the optional preprocessing component of the function. By default this value is set to True.
+
+*vars* This parameter is a character vector that allows the user to select which variables from the query he/she would like returned. By defaul this parameter is set to NULL.
+
+*numpages* This parameter is a number that allows the user to specify how many pages of results the user would like returned. The default is set to NULL, therefore the query returns all pages.
+
+
+In our first example, we will use the default parameters from the function. This will return a dataframe containing every page of results from our query request. Messy columns will be cleaned by converting them to the correct data class and dealing with missing values. All variables will be returned as well.
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_data <- CRDC_Large_Query()
+
+str(CRDC_data, list.len = 10)
+```
+
+In our second example we will return only the first 3 pages of results by setting the *numpages* parameter equal to 3. As a reminder all other parameters function in the same way as the **CRDC_Query()** function. Please review that section to understand how these parameters effect a query. 
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_data <- CRDC_Large_Query(numpages = 3)
+
+str(CRDC_data, list.len = 10)
+```
+
+### Function 3: CRDC_Merge_Queries()
+
+So far we have discussed how to interact with the two available CRDC APIs (enrollment and out-of-school suspension). Our next function can be utilized to interact with both APIs simultaneously. The function **CRDC_Large_Query()** takes in the result of queries to both the enrollment and out-of-school suspension APIs and merges them into one dataset. This function is useful for preparing a dataset for a larger statistical analysis. Though the function defaults to using the **CRDC_Query()** function, an object created by the **CRDC_Large_Query()** will also yield successful results. Please note that the inputs to this function must be a dataframe. In otherwords, *preprocess* parameter in either the **CRDC_Query()** or **CRDC_Large_Query()** need to be set to TRUE.
+
+Below is a full list of the parameters that can be adjusted in the **CRDC_Merge_Queries()** function:
+
+*enrollmentdata* This parameter is a dataframe that allows the user to define the enrollment data they want used for the merge. By default, the function runs a small batch query on the enrollment CRDC api.
+
+*suspensiondata* This parameter is a dataframe that allows the user to define the suspension data they want used for the merge. By default, the function runs a small batch query on the suspension CRDC api.
+
+*preprocess* This parameter is a logical which allows the user to turn on the optional preprocessing component of the function. By default this value is set to True.
+
+*joinby* This parameter is a string that allows the user to select which variables from the query he/she would to join the two datasets by. By defaul this parameter is set to "COMBOKEY".
+
+*enrollvars* This parameter is a character vector that allows the user to specify which of the enrollment dataset variables he/she would like returned. The Variable COMBOKEY is required as it is a used as the link between the two datasets. By Default this is sent to NULL.
+
+*suspensionvars* This parameter is a character vector that allows the user to specify which of the suspension dataset variables he/she would like returned. The Variable COMBOKEY is required as it is a used as the link between the two datasets. By Default this is sent to NULL.
+
+
+For all of our examples we will use the default dataframes for *enrollmentdata* and *suspensiondata*. The user can adjust those dataframes based on the parameters for either **CRDC_Query()** function or the **CRDC_Large_Query()* function. 
+
+In our first example, we will show the default output from the function. This will return us a dataframe containing all variables from the enrollment CRDC API and the out-of-school suspensions CRDC API. The dataframes will be joined on "COMBOKEY", the institution unique identifier. 
+
+```{r message=FALSE, warning=FALSE}
+library(rCRDC)
+
+CRDC_mergedata <- CRDC_Merge_Queries()
+
+str(CRDC_mergedata, list.len = 10)
+```
+
+In our next example we will show how the parameters can be adjusted to adjust the returned dataframe. First we will choose to join the two dataframes on the *SCH_NAME* variable by setting the *joinby* parameter to "SCH_NAME". Next we will return only a subset of both the *enrollmentdata* and the *suspensiondata* by adjusting the parameters to *enrollvars* and *suspensionvars* to two character vectors containing the variables we would like returned. The result of the function will return a merged data frame containing the specified variables from both the enrollment and out-of-school suspension CRDC APIs.
+
+```{r}
+library(rCRDC)
+
+CRDC_mergedata <- CRDC_Merge_Queries(joinby = "SCH_NAME", suspensionvars = c("COMBOKEY","SCH_NAME","LEAID","SCH_PSDISC_MULTOOS_WH_M"), enrollvars = c("COMBOKEY","SCH_NAME","SCH_ENR_504_F","SCH_ENR_504_M"))
+
+str(CRDC_mergedata)
+```
+
+#### Dealing with Errors from the CRDC_Merge_Queries() Function
+
+There are several potential error messages that you may recieve from the **CRDC_Merge_Queries()** function that we will now review. These errors extend beyond attempting to select variables from the dataset that do not exist. Though please avoid doing this also!!
+
+**ERROR 1:** *"COMBOKEY or SCH_NAME must be included inorder to merge. Please add one of these to the list supplied to enrollvars parameter. It must match the joinby parameter")*
+
+In the **CRDC_Merge_Queries()** function the user is able to select a subset of variables from each CRDC API by changing the parameters *enrollvars* and *suspensionvars*. However, the variable on which the two resulting dataframes are joining must be present in both of these lists! If you recieve this error please add the variable that you set *joinby* to to both *enrollvars* and *suspensionvars*.
+
+**ERROR 2:** *"All Variables from the Suspension Dataset have been removed due to duplicative information from the Enrollment Dataset. Please choose a different set of variables for suspensionvars parameter")*
+
+Part of **CRDC_Merge_Queries()** functionality is to remove duplicative columns when joining the two dataframes (enrollment data and suspension data) together. If no new information is added by executing the merge, i.e. all the columns from the suspension data are already shown in the enrollmentdata, the user will recieve this error message. Please revist the *enrollvars* and *suspensionvars* parameters and ensure that you are not selecting exclusively the same columns from both datasets. However, don't forget about ERROR 1 either, you must include the joinby parameter's value in both *enrollvars* and *suspensionvars* parameters for the merge to occur. 
+
+
+## Conclusion
+
+Once again, the **rCRDC** package gives users the ability to easily interact with both of the currently available CRDC APIs. This allows users to retrieve data on several key indicators for the Department of Education's Office of Civil Rights strategic deployment and enforcement of their mission. This data is returned in a format that is R readable and easily manipulated. We have reviewed many of the common uses of the functions provided in this package and several of the common errors affiliated with the more complex merge function. 
+    

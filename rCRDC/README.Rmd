@@ -1,0 +1,39 @@
+---
+output: github_document
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-",
+  out.width = "100%"
+)
+```
+# rCRDC
+
+The **rCRDC** package aims to allow users to more easily interact with the the CRDC APIs. The package provides several functions for making query requests to the CRDC APIs as well as merge the various APIs to one dataframe. The package returns objects that are R readable and ready for statistical analysis. 
+
+## Installation
+
+You can install the developer version of rCRDC from [GitHub]() with:
+
+``` r
+install.packages("rCRDC")
+```
+
+## Example
+
+This is a basic example which shows you how to solve a common problem:
+
+Say we want to get a count for the number of schools in each district by district name. We will query the Enrollment CRDC API to do so. Please review the vignette for more detailed examples.
+
+```{r example}
+library(rCRDC)
+
+CRDC_data <- CRDC_Query(vars = c("COMBOKEY","LEA_NAME"), sort = "COMBOKEY") %>%
+  group_by(LEA_NAME) %>%
+  summarise(count = n())
+```
