@@ -1,5 +1,0 @@
-"0","library(rCRDC)"
-"0","CRDC_data <- CRDC_Query(vars = c(""COMBOKEY"",""LEA_NAME""), sort = ""COMBOKEY"") %>%"
-"0","  group_by(LEA_NAME) %>%"
-"0","  summarise(count = n())"
-"0","head(CRDC_data)"
